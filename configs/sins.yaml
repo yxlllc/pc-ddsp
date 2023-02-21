@@ -1,0 +1,38 @@
+data: 
+  f0_extractor: 'parselmouth' # 'parselmouth' (singing) or 'dio' (speech) or 'harvest' (speech)
+  f0_min: 65 # about C2
+  f0_max: 800 # about G5
+  sampling_rate: 44100
+  win_length: 2048
+  block_size: 512 # Equal to hop_length
+  n_mels: 160
+  mel_fmin: 0 
+  mel_fmax: 22050 # <= sampling_rate / 2 
+  duration: 2 # Audio duration during training, must be less than the duration of the shortest audio clip
+  train_path: data/train # Create a folder named "audio" under this path and put the audio clip in it
+  valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
+model:
+  type: 'Sins'
+  n_harmonics: 128
+  n_mag_allpass: 256
+  n_mag_noise: 256
+loss:
+  fft_min: 256
+  fft_max: 2048
+  n_scale: 4 # rss kernel numbers
+  lambda_uv: 1.0 # uv regularization
+  uv_tolerance: 0.05 # set it to a large value or try other f0 extractors if val_loss_uv is much higher than train_loss_uv
+  detach_uv_step: 2000
+device: cuda
+env:
+  expdir: exp/sins-test
+  gpu_id: 0
+train:
+  batch_size: 24
+  cache_all_data: true # Save Internal-Memory if it is false, but may be slow
+  epochs: 100000
+  interval_log: 1
+  interval_val: 1000
+  lr: 0.0005
+  max_upsample_dim: 32 # Save Video-Memory for a small number, but may be slow if too small
+  weight_decay: 0

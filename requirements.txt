@@ -1,0 +1,11 @@
+einops
+gin
+gin_config
+librosa
+local_attention
+numpy
+praat-parselmouth
+pyworld
+PyYAML
+SoundFile
+tqdm
