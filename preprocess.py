@@ -37,6 +37,7 @@ def preprocess(
         sampling_rate,
         hop_length,
         win_length,
+        n_fft,
         n_mel_channels,
         mel_fmin,
         mel_fmax):
@@ -55,6 +56,7 @@ def preprocess(
         sampling_rate=sampling_rate,
         n_mel_channels=n_mel_channels,
         win_length=win_length,
+        n_fft=n_fft,
         mel_fmin=mel_fmin,
         mel_fmax=mel_fmax,
         clamp=1e-6).to(device)
@@ -156,8 +158,9 @@ if __name__ == '__main__':
     f0_min = args.data.f0_min
     f0_max = args.data.f0_max
     sampling_rate  = args.data.sampling_rate
-    hop_length     = args.data.block_size
-    win_length     = args.data.win_length
+    hop_length = args.data.block_size
+    win_length = args.data.win_length
+    n_fft = args.data.n_fft
     n_mel_channels = args.data.n_mels
     mel_fmin = args.data.mel_fmin
     mel_fmax = args.data.mel_fmax
@@ -184,6 +187,7 @@ if __name__ == '__main__':
             sampling_rate,
             hop_length,
             win_length,
+            n_fft,
             n_mel_channels,
             mel_fmin,
             mel_fmax)
