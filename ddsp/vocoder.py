@@ -68,7 +68,7 @@ class Audio2Mel(torch.nn.Module):
     ):
         super().__init__()
         n_fft = win_length if n_fft is None else n_fft
-        window = torch.hann_window(win_length).float()
+        self.hann_window = {}
         mel_basis = librosa_mel_fn(
             sr=sampling_rate,
             n_fft=n_fft, 
@@ -77,7 +77,6 @@ class Audio2Mel(torch.nn.Module):
             fmax=mel_fmax)
         mel_basis = torch.from_numpy(mel_basis).float()
         self.register_buffer("mel_basis", mel_basis)
-        self.register_buffer("window", window)
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.win_length = win_length
@@ -85,23 +84,40 @@ class Audio2Mel(torch.nn.Module):
         self.n_mel_channels = n_mel_channels
         self.clamp = clamp
 
-    def forward(self, audio):
-        '''
+    def forward(self, audio, keyshift=0, speed=1):
+        '''1
               audio: B x C x T
         og_mel_spec: B x T_ x C x n_mel 
         '''
+        factor = 2 ** (keyshift / 12)       
+        n_fft_new = int(np.round(self.n_fft * factor))
+        win_length_new = int(np.round(self.win_length * factor))
+        hop_length_new = int(np.round(self.hop_length * speed))
+        
+        keyshift_key = str(keyshift)+'_'+str(audio.device)
+        if keyshift_key not in self.hann_window:
+            self.hann_window[keyshift_key] = torch.hann_window(win_length_new).to(audio.device)
+            
         B, C, T = audio.shape
         audio = audio.reshape(B * C, T)
         fft = torch.stft(
             audio,
-            n_fft=self.n_fft,
-            hop_length=self.hop_length,
-            win_length=self.win_length,
-            window=self.window,
+            n_fft=n_fft_new,
+            hop_length=hop_length_new,
+            win_length=win_length_new,
+            window=self.hann_window[keyshift_key],
             center=True,
             return_complex=False)
         real_part, imag_part = fft.unbind(-1)
         magnitude = torch.sqrt(real_part ** 2 + imag_part ** 2)
+        
+        if keyshift != 0:
+            size = self.n_fft // 2 + 1
+            resize = magnitude.size(1)
+            if resize < size:
+                magnitude = F.pad(magnitude, (0, 0, 0, size-resize))
+            magnitude = magnitude[:, :size, :] * self.win_length / win_length_new
+            
         mel_output = torch.matmul(self.mel_basis, magnitude)
         log_mel_spec = torch.log10(torch.clamp(mel_output, min=self.clamp))
 
