@@ -180,7 +180,7 @@ def apply_window_to_impulse_response(impulse_response, # B, n_frames, 2*(n_mag-1
                             torch.zeros([padding]),
                             window[:half_idx]], axis=0)
     else:
-        window = window.roll(window.size(-1)//2, -1)
+        window = window.roll((window.size(-1) // 2).item(), -1)
         
     # Apply the window, to get new IR (both in zero-phase form).
     window = window.unsqueeze(0)
@@ -194,7 +194,7 @@ def apply_window_to_impulse_response(impulse_response, # B, n_frames, 2*(n_mag-1
                                     impulse_response[..., :second_half_end]],
                                     dim=-1)
     else:
-        impulse_response = impulse_response.roll(impulse_response.size(-1)//2, -1)
+        impulse_response = impulse_response.roll((impulse_response.size(-1) // 2).item(), -1)
 
     return impulse_response
 
@@ -227,7 +227,7 @@ def frequency_impulse_response(magnitudes,
         else:
             impulse_response = apply_dynamic_window_to_impulse_response(impulse_response, half_width_frames)
     else:
-        impulse_response = impulse_response.roll(impulse_response.size(-1) // 2, -1)
+        impulse_response = impulse_response.roll((impulse_response.size(-1) // 2).item(), -1)
        
     return impulse_response
 
