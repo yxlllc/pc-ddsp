@@ -71,7 +71,7 @@ def crop_and_compensate_delay(audio, audio_size, ir_size,
   # Compensate for the group delay of the filter by trimming the front.
   # For an impulse response produced by frequency_impulse_response(),
   # the group delay is constant because the filter is linear phase.
-  total_size = int(audio.shape[-1])
+  total_size = audio.size(-1)
   crop = total_size - crop_size
   start = (ir_size // 2 if delay_compensation < 0 else delay_compensation)
   end = crop - start
@@ -108,13 +108,8 @@ def fft_convolve(audio,
     batch_size_ir, n_ir_frames, ir_size = ir_shape
     batch_size, audio_size = audio.size() # B, T
 
-    # Validate that batch sizes match.
-    if batch_size != batch_size_ir:
-        raise ValueError('Batch size of audio ({}) and impulse response ({}) must '
-                        'be the same.'.format(batch_size, batch_size_ir))
-
     # Cut audio into 50% overlapped frames (center padding).
-    hop_size = int(audio_size / n_ir_frames)
+    hop_size = audio_size // n_ir_frames
     frame_size = 2 * hop_size
     unfold = torch.nn.Unfold(kernel_size=(1, frame_size), stride=(1, hop_size))
     audio_frames = unfold(F.pad(audio, (hop_size, hop_size)).unsqueeze(1).unsqueeze(1)).transpose(1, 2) # B, n_frames+1, 2*hop_size
@@ -167,7 +162,7 @@ def apply_window_to_impulse_response(impulse_response, # B, n_frames, 2*(n_mag-1
     
     # Get a window for better time/frequency resolution than rectangular.
     # Window defaults to IR size, cannot be bigger.
-    ir_size = int(impulse_response.size(-1))
+    ir_size = impulse_response.size(-1)
     if (window_size <= 0) or (window_size > ir_size):
         window_size = ir_size
     window = nn.Parameter(torch.hann_window(window_size), requires_grad = False).to(impulse_response)
@@ -180,7 +175,7 @@ def apply_window_to_impulse_response(impulse_response, # B, n_frames, 2*(n_mag-1
                             torch.zeros([padding]),
                             window[:half_idx]], axis=0)
     else:
-        window = window.roll((window.size(-1) // 2).item(), -1)
+        window = window.roll(int(window.size(-1)//2), -1)
         
     # Apply the window, to get new IR (both in zero-phase form).
     window = window.unsqueeze(0)
@@ -194,20 +189,20 @@ def apply_window_to_impulse_response(impulse_response, # B, n_frames, 2*(n_mag-1
                                     impulse_response[..., :second_half_end]],
                                     dim=-1)
     else:
-        impulse_response = impulse_response.roll((impulse_response.size(-1) // 2).item(), -1)
+        impulse_response = impulse_response.roll(int(impulse_response.size(-1)//2), -1)
 
     return impulse_response
 
 
 def apply_dynamic_window_to_impulse_response(impulse_response,  # B, n_frames, 2*(n_mag-1) or 2*n_mag-1
                                              half_width_frames):        # B，n_frames, 1
-    ir_size = int(impulse_response.size(-1)) # 2*(n_mag -1) or 2*n_mag-1
+    ir_size = impulse_response.size(-1) # 2*(n_mag -1) or 2*n_mag-1
     
     window = torch.arange(-(ir_size // 2), (ir_size + 1) // 2).to(impulse_response) / half_width_frames 
     window[window > 1] = 0
     window = (1 + torch.cos(np.pi * window)) / 2 # B, n_frames, 2*(n_mag -1) or 2*n_mag-1
     
-    impulse_response = impulse_response.roll(ir_size // 2, -1)
+    impulse_response = impulse_response.roll(int(ir_size // 2), -1)
     impulse_response = impulse_response * window
     
     return impulse_response
@@ -227,7 +222,7 @@ def frequency_impulse_response(magnitudes,
         else:
             impulse_response = apply_dynamic_window_to_impulse_response(impulse_response, half_width_frames)
     else:
-        impulse_response = impulse_response.roll((impulse_response.size(-1) // 2).item(), -1)
+        impulse_response = impulse_response.roll(int(impulse_response.size(-1) // 2), -1)
        
     return impulse_response
 
