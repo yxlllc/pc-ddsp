@@ -54,9 +54,10 @@ if __name__ == '__main__':
     # load model
     model, args = load_model(cmd.model_path, device=device)
     
-    sampling_rate  = args.data.sampling_rate
-    hop_length     = args.data.block_size
-    win_length     = args.data.win_length
+    sampling_rate = args.data.sampling_rate
+    hop_length = args.data.block_size
+    win_length = args.data.win_length
+    n_fft = args.data.n_fft
     n_mel_channels = args.data.n_mels
     mel_fmin = args.data.mel_fmin
     mel_fmax = args.data.mel_fmax
@@ -72,6 +73,7 @@ if __name__ == '__main__':
         sampling_rate=sampling_rate,
         n_mel_channels=n_mel_channels,
         win_length=win_length,
+        n_fft=n_fft,
         mel_fmin=mel_fmin,
         mel_fmax=mel_fmax).to(device)
     
@@ -107,7 +109,7 @@ if __name__ == '__main__':
      
     # forward and save the output
     with torch.no_grad():
-        signal, _, (s_h, s_n) = model(mel, f0, max_upsample_dim = 32)
+        signal, _, (s_h, s_n) = model(mel, f0)
         signal = signal.squeeze().cpu().numpy()
         sf.write(cmd.output, signal, args.data.sampling_rate)
      
