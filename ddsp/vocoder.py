@@ -24,34 +24,34 @@ def load_model(
     args = DotDict(args)
     
     # load model
-    model = None
-
-    if args.model.type == 'Sins':
-        model = Sins(
-            sampling_rate=args.data.sampling_rate,
-            block_size=args.data.block_size,
-            n_harmonics=args.model.n_harmonics,
-            n_mag_allpass=args.model.n_mag_allpass,
-            n_mag_noise=args.model.n_mag_noise,
-            n_mels=args.data.n_mels)
-    
-    elif args.model.type == 'CombSub':
-        model = CombSub(
-            sampling_rate=args.data.sampling_rate,
-            block_size=args.data.block_size,
-            n_mag_allpass=args.model.n_mag_allpass,
-            n_mag_harmonic=args.model.n_mag_harmonic,
-            n_mag_noise=args.model.n_mag_noise,
-            n_mels=args.data.n_mels)
-            
-    else:
-        raise ValueError(f" [x] Unknown Model: {args.model.type}")
-    
     print(' [Loading] ' + model_path)
-    ckpt = torch.load(model_path, map_location=torch.device(device))
-    model.to(device)
-    model.load_state_dict(ckpt['model'])
-    model.eval()
+    if model_path.split('.')[-1] == 'jit':
+        model = torch.jit.load(model_path, map_location=torch.device(device))
+    else:
+        if args.model.type == 'Sins':
+            model = Sins(
+                sampling_rate=args.data.sampling_rate,
+                block_size=args.data.block_size,
+                n_harmonics=args.model.n_harmonics,
+                n_mag_allpass=args.model.n_mag_allpass,
+                n_mag_noise=args.model.n_mag_noise,
+                n_mels=args.data.n_mels)
+    
+        elif args.model.type == 'CombSub':
+            model = CombSub(
+                sampling_rate=args.data.sampling_rate,
+                block_size=args.data.block_size,
+                n_mag_allpass=args.model.n_mag_allpass,
+                n_mag_harmonic=args.model.n_mag_harmonic,
+                n_mag_noise=args.model.n_mag_noise,
+                n_mels=args.data.n_mels)
+            
+        else:
+            raise ValueError(f" [x] Unknown Model: {args.model.type}")
+        model.to(device)
+        ckpt = torch.load(model_path, map_location=torch.device(device))
+        model.load_state_dict(ckpt['model'])
+        model.eval()
     return model, args
     
 class Audio2Mel(torch.nn.Module):
@@ -85,9 +85,9 @@ class Audio2Mel(torch.nn.Module):
         self.clamp = clamp
 
     def forward(self, audio, keyshift=0, speed=1):
-        '''1
+        '''
               audio: B x C x T
-        og_mel_spec: B x T_ x C x n_mel 
+        log_mel_spec: B x T_ x C x n_mel 
         '''
         factor = 2 ** (keyshift / 12)       
         n_fft_new = int(np.round(self.n_fft * factor))
