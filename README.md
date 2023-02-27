@@ -12,6 +12,8 @@ In order to achieve high-quality and stable singing voice synthesis, compared wi
 
 There are currently two models in the repository , "Sins" is a classic additive synthesis model based on sine wave excitation, and "CombSub" is a new subtractive synthesis model proposed by me, which is based on combtooth wave excitation. The "Sins" model changes the formant when a pitch shift is applied, while the "CombSub" model does not. In other words, the "CombSub" model does not change the timbre of the vocal.
 
+To Use the DDSP vocoders in [**DiffSinger (OpenVPI version)**](https://github.com/openvpi/DiffSinger), see [**DiffSinger.md**](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
+
 ## 1. Installing the dependencies
 We recommend first installing PyTorch from the [**official website**](https://pytorch.org/), then run:
 ```bash
@@ -32,11 +34,11 @@ python preprocess.py -c configs/sins.yaml
 ```
 for a model of sinusoids additive synthesiser.
 
-You can modify the configuration file `config/<model_name>.yaml` before preprocessing. The default configuration during training is 44.1khz sampling rate audio for about a few hours and GTX1660 graphics card.
+You can modify the configuration file `config/<model_name>.yaml` before preprocessing. The default configuration is suitable for training 44.1khz high sampling rate vocoder with GTX-1660 graphics card.
 
 NOTE 1: Please keep the sampling rate of all audio clips consistent with the sampling rate in the yaml configuration file ! If it is not consistent, the program can be executed safely, but the resampling during the training process will be very slow.
 
-NOTE 2: The total number of the audio clips for training dataset is recommended to be about 1000,  especially long audio clip can be cut into short segments, which will speed up the training, but the duration of all audio clips should not be less than 2 seconds. If there are too many audio clips, you need a large internal-memory or set the 'cache_all_data' option to false in the config files.
+NOTE 2: The total number of the audio clips for training dataset is recommended to be about 1000,  especially long audio clip can be cut into short segments, which will speed up the training, but the duration of all audio clips should not be less than 2 seconds. If there are too many audio clips, you need a large internal-memory or set the 'cache_all_data' option to false in the configuration file.
 
 NOTE 3: The total number of the audio clips for validation dataset is recommended to be about 10, please don't put too many or it will be very slow to do the validation.
 
