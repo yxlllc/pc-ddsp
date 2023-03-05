@@ -61,7 +61,8 @@ def get_data_loaders(args, whole_audio=False):
         data_train ,
         batch_size=args.train.batch_size if not whole_audio else 1,
         shuffle=True,
-        num_workers=0,
+        num_workers=args.train.num_workers,
+        persistent_workers=(args.train.num_workers > 0),
         pin_memory=True
     )
     data_valid = AudioDataset(
@@ -76,7 +77,8 @@ def get_data_loaders(args, whole_audio=False):
         data_valid,
         batch_size=1,
         shuffle=False,
-        num_workers=0,
+        num_workers=args.train.num_workers,
+        persistent_workers=(args.train.num_workers > 0),
         pin_memory=True
     )
     return loader_train, loader_valid 
