@@ -47,7 +47,7 @@ def load_model(
                 n_mels=args.data.n_mels)
         
         elif args.model.type == 'CombSubFast':
-            model = CombSub(
+            model = CombSubFast(
                 sampling_rate=args.data.sampling_rate,
                 block_size=args.data.block_size,
                 n_mels=args.data.n_mels)
