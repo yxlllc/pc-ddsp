@@ -94,10 +94,10 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
             # unpack data
             for k in data.keys():
                 if k != 'name':
-                    data[k] = data[k].to(args.device).float()
+                    data[k] = data[k].to(args.device)
             
             # forward
-            signal, _, (s_h, s_n) = model(data['mel'], data['f0'], max_upsample_dim = args.train.max_upsample_dim)
+            signal, _, (s_h, s_n) = model(data['mel'], data['f0'], infer=False)
 
             # loss
             detach_uv = False
@@ -121,7 +121,7 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
                         batch_idx,
                         num_batches,
                         args.env.expdir,
-                        1/saver.get_interval_time(),
+                        args.train.interval_log/saver.get_interval_time(),
                         loss.item(),
                         loss_rss.item(),
                         loss_uv.item(),

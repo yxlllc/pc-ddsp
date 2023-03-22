@@ -45,7 +45,13 @@ def load_model(
                 n_mag_harmonic=args.model.n_mag_harmonic,
                 n_mag_noise=args.model.n_mag_noise,
                 n_mels=args.data.n_mels)
-            
+        
+        elif args.model.type == 'CombSubFast':
+            model = CombSub(
+                sampling_rate=args.data.sampling_rate,
+                block_size=args.data.block_size,
+                n_mels=args.data.n_mels)
+                
         else:
             raise ValueError(f" [x] Unknown Model: {args.model.type}")
         model.to(device)
@@ -153,19 +159,21 @@ class Sins(torch.nn.Module):
         }
         self.mel2ctrl = Mel2Control(n_mels, split_map)
 
-    def forward(self, mel_frames, f0_frames, initial_phase=None, max_upsample_dim=32):
+    def forward(self, mel_frames, f0_frames, initial_phase=None, infer=True, max_upsample_dim=32):
         '''
             mel_frames: B x n_frames x n_mels
             f0_frames: B x n_frames x 1
         '''
         # exciter phase
         f0 = upsample(f0_frames, self.block_size)
-        if initial_phase is None:
-            initial_phase = torch.zeros(f0.shape[0], 1, 1).to(f0)
-            
-        x = torch.cumsum(f0.double() / self.sampling_rate, axis=1) + initial_phase.double() / 2 / np.pi
+        if infer:
+            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
+        else:
+            x = torch.cumsum(f0 / self.sampling_rate, axis=1)
+        if initial_phase is not None:
+            x += initial_phase.to(x) / 2 / np.pi    
         x = x - torch.round(x)
-        x = x.float()
+        x = x.to(f0)
         
         phase = 2 * np.pi * x
         phase_frames = phase[:, ::self.block_size, :]
@@ -206,6 +214,80 @@ class Sins(torch.nn.Module):
 
         return signal, phase, (harmonic, noise) #, (noise_param, noise_param)
 
+class CombSubFast(torch.nn.Module):
+    def __init__(self, 
+            sampling_rate,
+            block_size,
+            n_mels=80):
+        super().__init__()
+
+        print(' [DDSP Model] Combtooth Subtractive Synthesiser')
+        # params
+        self.register_buffer("sampling_rate", torch.tensor(sampling_rate))
+        self.register_buffer("block_size", torch.tensor(block_size))
+        self.register_buffer("window", torch.sqrt(torch.hann_window(2 * block_size)))
+        # Mel2Control
+        split_map = {
+            'harmonic_magnitude': block_size + 1, 
+            'harmonic_phase': block_size + 1,
+            'noise_magnitude': block_size + 1
+        }
+        self.mel2ctrl = Mel2Control(n_mels, split_map)
+
+    def forward(self,  mel_frames, f0_frames, initial_phase=None, infer=True, **kwargs):
+        '''
+            mel_frames: B x n_frames x n_mels
+            f0_frames: B x n_frames x 1
+        '''
+        # exciter phase
+        f0 = upsample(f0_frames, self.block_size)
+        if infer:
+            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
+        else:
+            x = torch.cumsum(f0 / self.sampling_rate, axis=1)
+        if initial_phase is not None:
+            x += initial_phase.to(x) / 2 / np.pi    
+        x = x - torch.round(x)
+        x = x.to(f0)
+        
+        phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
+        
+        # parameter prediction
+        ctrls = self.mel2ctrl(mel_frames, phase_frames)
+        
+        src_filter = torch.exp(ctrls['harmonic_magnitude'] + 1.j * np.pi * ctrls['harmonic_phase'])
+        src_filter = torch.cat((src_filter, src_filter[:,-1:,:]), 1)
+        noise_filter= torch.exp(ctrls['noise_magnitude']) / 128
+        noise_filter = torch.cat((noise_filter, noise_filter[:,-1:,:]), 1)
+        
+        # overlap-add kernel
+        fold = torch.nn.Fold(output_size=(1, (src_filter.size(1) + 1) * self.block_size), kernel_size=(1, 2 * self.block_size), stride=(1, self.block_size))
+        
+        # harmonic part
+        combtooth = torch.sinc(self.sampling_rate * x / (f0 + 1e-3))
+        combtooth = combtooth.squeeze(-1)     
+        combtooth_frames = F.pad(combtooth, (self.block_size, self.block_size)).unfold(1, 2 * self.block_size, self.block_size)
+        combtooth_frames = combtooth_frames * self.window
+        combtooth_fft = torch.fft.rfft(combtooth_frames, 2 * self.block_size)
+        
+        harmonic_fft = combtooth_fft * src_filter
+        harmonic_frames_out = torch.fft.irfft(harmonic_fft, 2 * self.block_size) * self.window
+        harmonic = fold(harmonic_frames_out.transpose(1, 2))[:, 0, 0, self.block_size : -self.block_size]
+        
+        # noise part
+        noise = torch.rand_like(combtooth) * 2 - 1
+        noise_frames = F.pad(noise, (self.block_size, self.block_size)).unfold(1, 2 * self.block_size, self.block_size)
+        noise_frames = noise_frames * self.window
+        noise_fft = torch.fft.rfft(noise_frames, 2 * self.block_size)
+        
+        noise_fft =  noise_fft * noise_filter
+        noise_frames_out = torch.fft.irfft(noise_fft, 2 * self.block_size) * self.window
+        noise = fold(noise_frames_out.transpose(1, 2))[:, 0, 0, self.block_size : -self.block_size]
+        
+        signal = harmonic + noise
+
+        return signal, phase_frames, (harmonic, noise)
+        
 class CombSub(torch.nn.Module):
     def __init__(self, 
             sampling_rate,
@@ -216,7 +298,7 @@ class CombSub(torch.nn.Module):
             n_mels=80):
         super().__init__()
 
-        print(' [DDSP Model] Combtooth Subtractive Synthesiser')
+        print(' [DDSP Model] Combtooth Subtractive Synthesiser (Old version)')
         # params
         self.register_buffer("sampling_rate", torch.tensor(sampling_rate))
         self.register_buffer("block_size", torch.tensor(block_size))
@@ -228,19 +310,21 @@ class CombSub(torch.nn.Module):
         }
         self.mel2ctrl = Mel2Control(n_mels, split_map)
 
-    def forward(self, mel_frames, f0_frames, initial_phase=None, **kwargs):
+    def forward(self, mel_frames, f0_frames, initial_phase=None, infer=True, **kwargs):
         '''
             mel_frames: B x n_frames x n_mels
             f0_frames: B x n_frames x 1
         '''
         # exciter phase
         f0 = upsample(f0_frames, self.block_size)
-        if initial_phase is None:
-            initial_phase = torch.zeros(f0.shape[0], 1, 1).to(f0)
-            
-        x = torch.cumsum(f0.double() / self.sampling_rate, axis=1) + initial_phase.double() / 2 / np.pi
+        if infer:
+            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
+        else:
+            x = torch.cumsum(f0 / self.sampling_rate, axis=1)
+        if initial_phase is not None:
+            x += initial_phase.to(x) / 2 / np.pi    
         x = x - torch.round(x)
-        x = x.float()
+        x = x.to(f0)
         
         phase_frames = 2 * np.pi * x[:, ::self.block_size, :]
         

@@ -13,10 +13,7 @@ data:
   train_path: data/train # Create a folder named "audio" under this path and put the audio clip in it
   valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
 model:
-  type: 'CombSub'
-  n_mag_allpass: 256
-  n_mag_harmonic:  512
-  n_mag_noise: 256
+  type: 'CombSubFast'
 loss:
   fft_min: 256
   fft_max: 2048
@@ -33,8 +30,7 @@ train:
   batch_size: 24
   cache_all_data: true # Save Internal-Memory if it is false, but may be slow
   epochs: 100000
-  interval_log: 1
+  interval_log: 10
   interval_val: 2000
   lr: 0.0005
-  max_upsample_dim: 32 # Save Video-Memory for a small number, but may be slow if too small
   weight_decay: 0
