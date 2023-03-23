@@ -55,6 +55,7 @@ if __name__ == '__main__':
         model = CombSubFast(
             sampling_rate=args.data.sampling_rate,
             block_size=args.data.block_size,
+            n_mag_noise=args.model.n_mag_noise,
             n_mels=args.data.n_mels)
             
     else:

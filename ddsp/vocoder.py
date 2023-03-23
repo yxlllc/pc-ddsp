@@ -50,6 +50,7 @@ def load_model(
             model = CombSubFast(
                 sampling_rate=args.data.sampling_rate,
                 block_size=args.data.block_size,
+                n_mag_noise=args.model.n_mag_noise,
                 n_mels=args.data.n_mels)
                 
         else:
@@ -218,6 +219,7 @@ class CombSubFast(torch.nn.Module):
     def __init__(self, 
             sampling_rate,
             block_size,
+            n_mag_noise,
             n_mels=80):
         super().__init__()
 
@@ -230,7 +232,7 @@ class CombSubFast(torch.nn.Module):
         split_map = {
             'harmonic_magnitude': block_size + 1, 
             'harmonic_phase': block_size + 1,
-            'noise_magnitude': block_size + 1
+            'noise_magnitude': n_mag_noise
         }
         self.mel2ctrl = Mel2Control(n_mels, split_map)
 
@@ -258,10 +260,6 @@ class CombSubFast(torch.nn.Module):
         src_filter = torch.exp(ctrls['harmonic_magnitude'] + 1.j * np.pi * ctrls['harmonic_phase'])
         src_filter = torch.cat((src_filter, src_filter[:,-1:,:]), 1)
         noise_filter= torch.exp(ctrls['noise_magnitude']) / 128
-        noise_filter = torch.cat((noise_filter, noise_filter[:,-1:,:]), 1)
-        
-        # overlap-add kernel
-        fold = torch.nn.Fold(output_size=(1, (src_filter.size(1) + 1) * self.block_size), kernel_size=(1, 2 * self.block_size), stride=(1, self.block_size))
         
         # harmonic part
         combtooth = torch.sinc(self.sampling_rate * x / (f0 + 1e-3))
@@ -272,18 +270,16 @@ class CombSubFast(torch.nn.Module):
         
         harmonic_fft = combtooth_fft * src_filter
         harmonic_frames_out = torch.fft.irfft(harmonic_fft, 2 * self.block_size) * self.window
+        fold = torch.nn.Fold(output_size=(1, (src_filter.size(1) + 1) * self.block_size), kernel_size=(1, 2 * self.block_size), stride=(1, self.block_size))
         harmonic = fold(harmonic_frames_out.transpose(1, 2))[:, 0, 0, self.block_size : -self.block_size]
         
-        # noise part
-        noise = torch.rand_like(combtooth) * 2 - 1
-        noise_frames = F.pad(noise, (self.block_size, self.block_size)).unfold(1, 2 * self.block_size, self.block_size)
-        noise_frames = noise_frames * self.window
-        noise_fft = torch.fft.rfft(noise_frames, 2 * self.block_size)
-        
-        noise_fft =  noise_fft * noise_filter
-        noise_frames_out = torch.fft.irfft(noise_fft, 2 * self.block_size) * self.window
-        noise = fold(noise_frames_out.transpose(1, 2))[:, 0, 0, self.block_size : -self.block_size]
-        
+        # noise part filter (using constant-windowed LTV-FIR, without group-delay)
+        noise = torch.rand_like(harmonic).to(noise_filter) * 2 - 1
+        noise = frequency_filter(
+                        noise,
+                        torch.complex(noise_filter, torch.zeros_like(noise_filter)),
+                        hann_window = True)
+                        
         signal = harmonic + noise
 
         return signal, phase_frames, (harmonic, noise)

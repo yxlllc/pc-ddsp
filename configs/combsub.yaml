@@ -14,6 +14,7 @@ data:
   valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
 model:
   type: 'CombSubFast'
+  n_mag_noise: 256
 loss:
   fft_min: 256
   fft_max: 2048

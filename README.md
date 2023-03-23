@@ -14,6 +14,8 @@ There are currently two models in the repository , "Sins" is a classic additive 
 
 To Use the DDSP vocoders in [**DiffSinger (OpenVPI version)**](https://github.com/openvpi/DiffSinger), see [**DiffSinger.md**](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
 
+UPDATE:  Now the 'CombSub' model has been upgraded, and it has better sound quality when doing copy-synthesising (including application in SVS system), but at the cost of its performance of pitch-shifting. If you want to get good pitch-shifting performance, you can train the old 'CombSub' model, the configuration file is 'combsub-old.yaml'.
+
 ## 1. Installing the dependencies
 We recommend first installing PyTorch from the [**official website**](https://pytorch.org/), then run:
 ```bash
