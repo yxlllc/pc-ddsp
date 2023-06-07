@@ -5,7 +5,7 @@ import torch
 from logger import utils
 from data_loaders import get_data_loaders
 from solver import train
-from ddsp.vocoder import Sins, CombSub, CombSubFast
+from ddsp.vocoder import Sins, CombSub
 from ddsp.loss import HybridLoss
 
 
@@ -38,7 +38,6 @@ if __name__ == '__main__':
             sampling_rate=args.data.sampling_rate,
             block_size=args.data.block_size,
             n_harmonics=args.model.n_harmonics,
-            n_mag_allpass=args.model.n_mag_allpass,
             n_mag_noise=args.model.n_mag_noise,
             n_mels=args.data.n_mels)
  
@@ -46,15 +45,7 @@ if __name__ == '__main__':
         model = CombSub(
             sampling_rate=args.data.sampling_rate,
             block_size=args.data.block_size,
-            n_mag_allpass=args.model.n_mag_allpass,
             n_mag_harmonic=args.model.n_mag_harmonic,
-            n_mag_noise=args.model.n_mag_noise,
-            n_mels=args.data.n_mels)
-    
-    elif args.model.type == 'CombSubFast':
-        model = CombSubFast(
-            sampling_rate=args.data.sampling_rate,
-            block_size=args.data.block_size,
             n_mag_noise=args.model.n_mag_noise,
             n_mels=args.data.n_mels)
             

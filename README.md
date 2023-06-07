@@ -8,19 +8,21 @@ https://github.com/magenta/ddsp
 
 https://github.com/YatingMusic/ddsp-singing-vocoders
 
-In order to achieve high-quality and stable singing voice synthesis, compared with the above repositories, this repository has applied many algorithm improvements, including but not limited to volume augmentation, random-scaled STFT loss, UV regularization, phase model and group delay prediction.
+In order to achieve high-quality and stable singing voice synthesis, compared with the above repositories, this repository has applied many algorithm improvements, including but not limited to volume augmentation, random-scaled STFT loss, UV regularization and phase prediction.
 
 There are currently two models in the repository , "Sins" is a classic additive synthesis model based on sine wave excitation, and "CombSub" is a new subtractive synthesis model proposed by me, which is based on combtooth wave excitation. The "Sins" model changes the formant when a pitch shift is applied, while the "CombSub" model does not. In other words, the "CombSub" model does not change the timbre of the vocal.
 
 To Use the DDSP vocoders in [**DiffSinger (OpenVPI version)**](https://github.com/openvpi/DiffSinger), see [**DiffSinger.md**](https://github.com/yxlllc/pc-ddsp/blob/master/DiffSinger.md).
 
-UPDATE:  Now the 'CombSub' model has been upgraded, and it has better sound quality when doing copy-synthesising (including application in SVS system), but at the cost of its performance of pitch-shifting. If you want to get good pitch-shifting performance, you can train the old 'CombSub' model, the configuration file is 'combsub-old.yaml'.
+UPDATE (2023.6.7):  Now both the 'CombSub' model and the 'Sins' model have been upgraded, and they better sound quality when doing copy-synthesising (including application in SVS system) and pitch-shifting, so the old version is not compatible.
 
 ## 1. Installing the dependencies
 We recommend first installing PyTorch from the [**official website**](https://pytorch.org/), then run:
 ```bash
 pip install -r requirements.txt 
 ```
+UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works, and training is faster.
+
 ## 2. Preprocessing
 Put all the training dataset (.wav format audio clips) in the below directory:
 `data/train/audio`.
@@ -85,7 +87,7 @@ The "Sins" model works also well when applying copy synthesis, but it changes th
 ## 7. Comments on the sound quality
 The sound quality of a well-trained DDSP vocoder (seen speaker) will be better than that of the world vocoder or griffin-lim vocoder, and it can also compete with the generative model-based vocoders (such as HifiGAN) when the total amount of training data is relatively small. But for a large amount of training data, the upper limit of sound quality will be lower than that of generative model based vocoders.
 
-Compared with high quality live recordings, the main defect of the current DDSP vocoder is the metallic noise, which may be due to the distortion of phase models based on non-generative models,  and the STFT loss overemphasizes the periodic components in the signal, resulting in too many high frequency band harmonics.
+Compared with high quality live recordings, the main defect of the current DDSP vocoder is the metallic noise, which may be due to the distortion of phase prediction based on a non-generative model,  and the STFT loss overemphasizes the periodic components in the signal, resulting in too many high frequency band harmonics.
 
 
 

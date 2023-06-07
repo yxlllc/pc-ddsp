@@ -13,7 +13,8 @@ data:
   train_path: data/train # Create a folder named "audio" under this path and put the audio clip in it
   valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
 model:
-  type: 'CombSubFast'
+  type: 'CombSub'
+  n_mag_harmonic: 512
   n_mag_noise: 256
 loss:
   fft_min: 256
@@ -27,7 +28,7 @@ env:
   expdir: exp/combsub-test
   gpu_id: 0
 train:
-  num_workers: 4 # if your cpu and gpu are both very strong, set to 0 may be faster!
+  num_workers: 2 # if your cpu and gpu are both very strong, set to 0 may be faster!
   batch_size: 24
   cache_all_data: true # Save Internal-Memory if it is false, but may be slow
   epochs: 100000

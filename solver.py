@@ -34,7 +34,7 @@ def test(args, model, loss_func, loader_test, saver):
 
             # forward
             st_time = time.time()
-            signal, _, (s_h, s_n) = model(data['mel'], data['f0'], max_upsample_dim = args.train.max_upsample_dim)
+            signal, _, (s_h, s_n) = model(data['mel'], data['f0'])
             ed_time = time.time()
 
             # crop
