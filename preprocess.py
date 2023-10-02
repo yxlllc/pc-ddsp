@@ -81,14 +81,17 @@ def preprocess(
         mel = m_t.squeeze().to('cpu').numpy()
 
         # extract f0 using parselmouth
-        if f0_extractor == 'parselmouth':
-            f0 = parselmouth.Sound(x, sampling_rate).to_pitch_ac(
-                time_step=hop_length / sampling_rate, 
-                voicing_threshold=0.6,
-                pitch_floor=f0_min, 
-                pitch_ceiling=f0_max).selected_array['frequency']
-            pad_size=(int(len(x) // hop_length) - len(f0) + 1) // 2
-            f0 = np.pad(f0,[[pad_size,len(mel) - len(f0) - pad_size]], mode='constant')
+        if f0_extractor == 'parselmouth':            
+            l_pad = int(np.ceil(1.5 / f0_min * sampling_rate))
+            r_pad = hop_length * ((len(x) - 1) // hop_length + 1) - len(x) + l_pad + 1
+            s = parselmouth.Sound(np.pad(x, (l_pad, r_pad)), sampling_rate).to_pitch_ac(
+                    time_step=hop_length / sampling_rate, voicing_threshold=0.6,
+                    pitch_floor=f0_min, pitch_ceiling=1100)
+            assert np.abs(s.t1 - 1.5 / f0_min) < 0.001
+            f0 = s.selected_array['frequency']
+            if len(f0) < len(mel):
+                f0 = np.pad(f0, (0, len(mel) - len(f0)))
+            f0 = f0[: len(mel)]
             
         # extract f0 using dio
         elif f0_extractor == 'dio':

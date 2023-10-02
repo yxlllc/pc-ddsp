@@ -93,11 +93,17 @@ if __name__ == '__main__':
     '''
     
     # f0 analysis using parselmouth (faster)
-    f0 = parselmouth.Sound(x, sampling_rate).to_pitch_ac(
+    pitch_floor = 65
+    l_pad = int(np.ceil(1.5 / pitch_floor * sampling_rate))
+    r_pad = hop_length * ((len(x) - 1) // hop_length + 1) - len(x) + l_pad + 1
+    s = parselmouth.Sound(np.pad(x, (l_pad, r_pad)), sampling_rate).to_pitch_ac(
             time_step=hop_length / sampling_rate, voicing_threshold=0.6,
-            pitch_floor=65, pitch_ceiling=800).selected_array['frequency']
-    pad_size=(int(len(x) // hop_length) - len(f0) + 1) // 2
-    f0 = np.pad(f0,[[pad_size,mel.size(1) - len(f0) - pad_size]], mode='constant')
+            pitch_floor=pitch_floor, pitch_ceiling=1100)
+    assert np.abs(s.t1 - 1.5 / pitch_floor) < 0.001
+    f0 = s.selected_array['frequency']
+    if len(f0) < mel.size(1):
+        f0 = np.pad(f0, (0, mel.size(1) - len(f0)))
+    f0 = f0[: mel.size(1)]
     
     # interpolate the unvoiced f0 
     uv = f0 == 0
