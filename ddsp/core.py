@@ -203,7 +203,7 @@ def apply_dynamic_window_to_impulse_response(impulse_response,  # B, n_frames, 2
     ir_size = impulse_response.size(-1) # 2*(n_mag -1) or 2*n_mag-1
     
     window = torch.arange(-(ir_size // 2), (ir_size + 1) // 2).to(impulse_response) / half_width_frames 
-    window[window > 1] = 0
+    window = torch.clamp(window, min=-1, max=1)
     window = (1 + torch.cos(np.pi * window)) / 2 # B, n_frames, 2*(n_mag -1) or 2*n_mag-1
     
     impulse_response = impulse_response.roll(int(ir_size // 2), -1)
