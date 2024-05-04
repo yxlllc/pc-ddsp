@@ -14,6 +14,7 @@ data:
   valid_path: data/val # Create a folder named "audio" under this path and put the audio clip in it
 model:
   type: 'Sins'
+  win_length: 2048
   n_harmonics: 128
   n_mag_noise: 256
 loss:

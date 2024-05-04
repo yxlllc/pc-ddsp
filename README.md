@@ -14,6 +14,8 @@ UPDATE (2023.6.7): Now both the 'CombSub' model and the 'Sins' model have been u
 
 UPDATE (2023.10.15): Improve the phase filter, so the old version is not compatible.
 
+UPDATE (2024.5.4): Improve the model and refactor the code, so the old version is not compatible.
+
 ## 1. Installing the dependencies
 
 We recommend first installing PyTorch from the [official website](https://pytorch.org/), then run:

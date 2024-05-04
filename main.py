@@ -111,11 +111,18 @@ if __name__ == '__main__':
     f0 = torch.from_numpy(f0).float().to(device).unsqueeze(-1).unsqueeze(0)
    
     # key change
-    f0 = f0 * 2**(float(cmd.key)/12)
+    key_change = float(cmd.key)
+    if key_change != 0:
+        output_f0 = f0 * 2 ** (key_change / 12)
+    else:
+        output_f0 = None
      
     # forward and save the output
     with torch.no_grad():
-        signal, _, (s_h, s_n) = model(mel, f0)
+        if output_f0 is None:
+            signal, _, (s_h, s_n) = model(mel, f0)
+        else:
+            signal, _, (s_h, s_n) = model(mel, f0, output_f0)
         signal = signal.squeeze().cpu().numpy()
         sf.write(cmd.output, signal, args.data.sampling_rate)
      

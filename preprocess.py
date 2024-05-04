@@ -124,7 +124,7 @@ def preprocess(
             f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
             uv = uv.astype('float')
             uv = np.min(np.array([uv[:-2],uv[1:-1],uv[2:]]),axis=0)
-            uv = np.pad(uv, (1, 1))
+            uv = np.pad(uv, (1, 1), constant_values=(uv[0], uv[-1]))
             # save npy
             os.makedirs(os.path.dirname(path_melfile), exist_ok=True)
             np.save(path_melfile, mel)
