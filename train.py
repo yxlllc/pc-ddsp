@@ -38,6 +38,7 @@ if __name__ == '__main__':
             sampling_rate=args.data.sampling_rate,
             block_size=args.data.block_size,
             win_length=args.model.win_length,
+            use_mean_filter=args.model.use_mean_filter,
             n_harmonics=args.model.n_harmonics,
             n_mag_noise=args.model.n_mag_noise,
             n_mels=args.data.n_mels)
@@ -47,6 +48,7 @@ if __name__ == '__main__':
             sampling_rate=args.data.sampling_rate,
             block_size=args.data.block_size,
             win_length=args.model.win_length,
+            use_mean_filter=args.model.use_mean_filter,
             n_mag_harmonic=args.model.n_mag_harmonic,
             n_mag_noise=args.model.n_mag_noise,
             n_mels=args.data.n_mels)

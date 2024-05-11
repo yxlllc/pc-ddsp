@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from librosa.filters import mel as librosa_mel_fn
 from .mel2control import Mel2Control
-from .core import frequency_filter, upsample, remove_above_fmax
+from .core import frequency_filter, meanfilter, upsample, remove_above_fmax
 
 class DotDict(dict):
     def __getattr__(*args):         
@@ -33,6 +33,7 @@ def load_model(
                 sampling_rate=args.data.sampling_rate,
                 block_size=args.data.block_size,
                 win_length=args.model.win_length,
+                use_mean_filter=args.model.use_mean_filter,              
                 n_harmonics=args.model.n_harmonics,
                 n_mag_noise=args.model.n_mag_noise,
                 n_mels=args.data.n_mels)
@@ -42,6 +43,7 @@ def load_model(
                 sampling_rate=args.data.sampling_rate,
                 block_size=args.data.block_size,
                 win_length=args.model.win_length,
+                use_mean_filter=args.model.use_mean_filter,               
                 n_mag_harmonic=args.model.n_mag_harmonic,
                 n_mag_noise=args.model.n_mag_noise,
                 n_mels=args.data.n_mels)
@@ -134,6 +136,7 @@ class Sins(torch.nn.Module):
             sampling_rate,
             block_size,
             win_length,
+            use_mean_filter,
             n_harmonics,
             n_mag_noise,
             n_mels=80):
@@ -154,6 +157,11 @@ class Sins(torch.nn.Module):
             'noise_phase': n_mag_noise,
         }
         self.mel2ctrl = Mel2Control(n_mels, block_size, split_map)
+        # mean filter kernel size
+        if use_mean_filter:
+            self.mean_kernel_size = win_length // block_size
+        else:
+            self.mean_kernel_size = 1
 
     def forward(self, 
             mel_frames, 
@@ -185,7 +193,10 @@ class Sins(torch.nn.Module):
         
         # parameter prediction
         ctrls = self.mel2ctrl(mel_frames, sinusoid_frames, noise_frames)
-                
+        if self.mean_kernel_size > 1:
+            ctrls['amplitudes'] = meanfilter(ctrls['amplitudes'], self.mean_kernel_size)
+            ctrls['harmonic_phase'] = meanfilter(ctrls['harmonic_phase'], self.mean_kernel_size)
+            
         src_allpass = torch.exp(1.j * np.pi * ctrls['harmonic_phase'])
         src_allpass = torch.cat((src_allpass, src_allpass[:,-1:,:]), 1)
         amplitudes_frames = torch.exp(ctrls['amplitudes'])/ 128
@@ -242,6 +253,7 @@ class CombSub(torch.nn.Module):
             sampling_rate,
             block_size,
             win_length,
+            use_mean_filter,
             n_mag_harmonic,
             n_mag_noise,
             n_mels=80):
@@ -261,7 +273,12 @@ class CombSub(torch.nn.Module):
             'noise_phase': n_mag_noise,
         }
         self.mel2ctrl = Mel2Control(n_mels, block_size, split_map)
-
+        # mean filter kernel size
+        if use_mean_filter:
+            self.mean_kernel_size = win_length // block_size
+        else:
+            self.mean_kernel_size = 1
+            
     def forward(self, 
             mel_frames, 
             f0_frames,
@@ -291,6 +308,9 @@ class CombSub(torch.nn.Module):
         
         # parameter prediction
         ctrls = self.mel2ctrl(mel_frames, combtooth_frames, noise_frames)
+        if self.mean_kernel_size > 1:
+            ctrls['harmonic_magnitude'] = meanfilter(ctrls['harmonic_magnitude'], self.mean_kernel_size)
+            ctrls['harmonic_phase'] = meanfilter(ctrls['harmonic_phase'], self.mean_kernel_size)
         
         src_allpass = torch.exp(1.j * np.pi * ctrls['harmonic_phase'])
         src_allpass = torch.cat((src_allpass, src_allpass[:,-1:,:]), 1)

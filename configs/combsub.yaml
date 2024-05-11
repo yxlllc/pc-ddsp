@@ -15,6 +15,7 @@ data:
 model:
   type: 'CombSub'
   win_length: 2048
+  use_mean_filter: true  
   n_mag_harmonic: 512
   n_mag_noise: 256
 loss:

@@ -24,6 +24,15 @@ def get_fft_size(frame_size: int, ir_size: int, power_of_2: bool = True):
   return fft_size
 
 
+def meanfilter(signal, kernel_size):
+    signal = signal.permute(0, 2, 1)
+    signal = F.pad(signal, ((kernel_size - 1) // 2, kernel_size // 2), mode="reflect")
+    ones_kernel = torch.ones(signal.size(1), 1, kernel_size, device=signal.device)
+    signal = F.conv1d(signal, ones_kernel, stride=1, padding=0, groups=signal.size(1))
+    signal = signal / kernel_size
+    return signal.permute(0, 2, 1)
+    
+    
 def upsample(signal, factor):
     signal = signal.permute(0, 2, 1)
     signal = nn.functional.interpolate(torch.cat((signal,signal[:,:,-1:]),2), size=signal.shape[-1] * factor + 1, mode='linear', align_corners=True)
