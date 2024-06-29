@@ -319,7 +319,8 @@ class CombSub(torch.nn.Module):
         
         # harmonic part filter (using dynamic-windowed LTV-FIR)
         if infer and output_f0_frames is not None:
-            f0 = upsample(output_f0_frames, self.block_size)
+            f0_frames = output_f0_frames
+            f0 = upsample(f0_frames, self.block_size)
             x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
             x = x - torch.round(x)
             x = x.to(f0)
