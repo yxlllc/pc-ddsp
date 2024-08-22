@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from librosa.filters import mel as librosa_mel_fn
 from .mel2control import Mel2Control
-from .core import frequency_filter, meanfilter, upsample, remove_above_fmax
+from .core import frequency_filter, mean_filter, upsample
 
 class DotDict(dict):
     def __getattr__(*args):         
@@ -14,7 +14,8 @@ class DotDict(dict):
 
     __setattr__ = dict.__setitem__    
     __delattr__ = dict.__delitem__
-    
+
+
 def load_model(
         model_path,
         device='cpu'):
@@ -55,7 +56,8 @@ def load_model(
         model.load_state_dict(ckpt['model'])
         model.eval()
     return model, args
-    
+
+
 class Audio2Mel(torch.nn.Module):
     def __init__(
         self,
@@ -130,7 +132,8 @@ class Audio2Mel(torch.nn.Module):
         # print('og_mel_spec:', log_mel_spec.shape)
         log_mel_spec = log_mel_spec.squeeze(2) # mono
         return log_mel_spec
-        
+
+       
 class Sins(torch.nn.Module):
     def __init__(self, 
             sampling_rate,
@@ -162,7 +165,18 @@ class Sins(torch.nn.Module):
             self.mean_kernel_size = win_length // block_size
         else:
             self.mean_kernel_size = 1
-
+    
+    def fast_phase_gen(self, f0_frames):
+        n = torch.arange(self.block_size, device=f0_frames.device)
+        s0 = f0_frames / self.sampling_rate
+        ds0 = F.pad(s0[:, 1:, :] - s0[:, :-1, :], (0, 0, 0, 1))
+        rad = s0 * (n + 1) + 0.5 * ds0 * n * (n + 1) / self.block_size
+        rad2 = torch.fmod(rad[..., -1:].float() + 0.5, 1.0) - 0.5
+        rad_acc = rad2.cumsum(dim=1).fmod(1.0).to(f0_frames)
+        rad += F.pad(rad_acc[:, :-1, :], (0, 0, 1, 0))
+        phase = 2 * np.pi * rad.reshape(f0_frames.shape[0], -1, 1)
+        return phase
+    
     def forward(self, 
             mel_frames, 
             f0_frames, 
@@ -174,14 +188,7 @@ class Sins(torch.nn.Module):
             f0_frames: B x n_frames x 1
         '''
         # exciter phase
-        f0 = upsample(f0_frames, self.block_size)
-        if infer:
-            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
-        else:
-            x = torch.cumsum(f0 / self.sampling_rate, axis=1)   
-        x = x - torch.round(x)
-        x = x.to(f0)
-        phase = 2 * np.pi * x
+        phase = self.fast_phase_gen(f0_frames)
         
         # sinusoid exciter signal
         sinusoid = torch.sin(phase).squeeze(-1)
@@ -194,25 +201,22 @@ class Sins(torch.nn.Module):
         # parameter prediction
         ctrls = self.mel2ctrl(mel_frames, sinusoid_frames, noise_frames)
         if self.mean_kernel_size > 1:
-            ctrls['amplitudes'] = meanfilter(ctrls['amplitudes'], self.mean_kernel_size)
-            ctrls['harmonic_phase'] = meanfilter(ctrls['harmonic_phase'], self.mean_kernel_size)
+            ctrls['amplitudes'] = mean_filter(ctrls['amplitudes'], self.mean_kernel_size)
+            ctrls['harmonic_phase'] = mean_filter(ctrls['harmonic_phase'], self.mean_kernel_size)
             
         src_allpass = torch.exp(1.j * np.pi * ctrls['harmonic_phase'])
         src_allpass = torch.cat((src_allpass, src_allpass[:,-1:,:]), 1)
         amplitudes_frames = torch.exp(ctrls['amplitudes'])/ 128
         noise_param = torch.exp(ctrls['noise_magnitude'] + 1.j * np.pi * ctrls['noise_phase']) / 128
         
-        # sinusoids exciter signal
+        # harmonic additive synthesis
         if infer and output_f0_frames is not None:
             f0_frames = output_f0_frames
-            f0 = upsample(f0_frames, self.block_size)
-            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
-            x = x - torch.round(x)
-            x = x.to(f0)
-            phase = 2 * np.pi * x
-        amplitudes_frames = remove_above_fmax(amplitudes_frames, f0_frames, self.sampling_rate / 2, level_start = 1)
+            phase = self.fast_phase_gen(output_f0_frames)  
         n_harmonic = amplitudes_frames.shape[-1]
-        level_harmonic = torch.arange(1, n_harmonic + 1).to(phase)
+        level_harmonic = torch.arange(1, n_harmonic + 1, device=phase.device)
+        mask = (f0_frames * level_harmonic < self.sampling_rate / 2).float() + 1e-7
+        amplitudes_frames *= mask
         sinusoids = 0.
         for n in range(( n_harmonic - 1) // max_upsample_dim + 1):
             start = n * max_upsample_dim
@@ -248,6 +252,7 @@ class Sins(torch.nn.Module):
 
         return signal, sinusoids, (harmonic, noise)
         
+        
 class CombSub(torch.nn.Module):
     def __init__(self, 
             sampling_rate,
@@ -278,7 +283,20 @@ class CombSub(torch.nn.Module):
             self.mean_kernel_size = win_length // block_size
         else:
             self.mean_kernel_size = 1
-            
+    
+    def fast_source_gen(self, f0_frames):
+        n = torch.arange(self.block_size, device=f0_frames.device)
+        s0 = f0_frames / self.sampling_rate
+        ds0 = F.pad(s0[:, 1:, :] - s0[:, :-1, :], (0, 0, 0, 1))
+        rad = s0 * (n + 1) + 0.5 * ds0 * n * (n + 1) / self.block_size
+        s0 = s0 + ds0 * n / self.block_size
+        rad2 = torch.fmod(rad[..., -1:].float() + 0.5, 1.0) - 0.5
+        rad_acc = rad2.cumsum(dim=1).fmod(1.0).to(f0_frames)
+        rad += F.pad(rad_acc[:, :-1, :], (0, 0, 1, 0))
+        rad -= torch.round(rad)
+        combtooth = torch.sinc(rad / (s0 + 1e-5)).reshape(f0_frames.shape[0], -1)
+        return combtooth
+        
     def forward(self, 
             mel_frames, 
             f0_frames,
@@ -289,17 +307,9 @@ class CombSub(torch.nn.Module):
             mel_frames: B x n_frames x n_mels
             f0_frames: B x n_frames x 1
         '''
-        # exciter phase
-        f0 = upsample(f0_frames, self.block_size)
-        if infer:
-            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
-        else:
-            x = torch.cumsum(f0 / self.sampling_rate, axis=1)   
-        x = x - torch.round(x)
-        x = x.to(f0)
                 
         # combtooth exciter signal
-        combtooth = torch.sinc(self.sampling_rate * x / (f0 + 1e-3)).squeeze(-1)
+        combtooth = self.fast_source_gen(f0_frames)
         combtooth_frames = combtooth.unfold(1, self.block_size, self.block_size)
         
         # noise exciter signal
@@ -309,8 +319,8 @@ class CombSub(torch.nn.Module):
         # parameter prediction
         ctrls = self.mel2ctrl(mel_frames, combtooth_frames, noise_frames)
         if self.mean_kernel_size > 1:
-            ctrls['harmonic_magnitude'] = meanfilter(ctrls['harmonic_magnitude'], self.mean_kernel_size)
-            ctrls['harmonic_phase'] = meanfilter(ctrls['harmonic_phase'], self.mean_kernel_size)
+            ctrls['harmonic_magnitude'] = mean_filter(ctrls['harmonic_magnitude'], self.mean_kernel_size)
+            ctrls['harmonic_phase'] = mean_filter(ctrls['harmonic_phase'], self.mean_kernel_size)
         
         src_allpass = torch.exp(1.j * np.pi * ctrls['harmonic_phase'])
         src_allpass = torch.cat((src_allpass, src_allpass[:,-1:,:]), 1)
@@ -320,11 +330,7 @@ class CombSub(torch.nn.Module):
         # harmonic part filter (using dynamic-windowed LTV-FIR)
         if infer and output_f0_frames is not None:
             f0_frames = output_f0_frames
-            f0 = upsample(f0_frames, self.block_size)
-            x = torch.cumsum(f0.double() / self.sampling_rate, axis=1)
-            x = x - torch.round(x)
-            x = x.to(f0)
-            combtooth = torch.sinc(self.sampling_rate * x / (f0 + 1e-3)).squeeze(-1)
+            combtooth = self.fast_source_gen(output_f0_frames)
         harmonic = frequency_filter(
                         combtooth,
                         torch.complex(src_param, torch.zeros_like(src_param)),
