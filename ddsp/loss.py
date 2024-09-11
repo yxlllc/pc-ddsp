@@ -13,13 +13,14 @@ class HybridLoss(nn.Module):
         self.loss_uv_func = UVLoss(block_size)
         self.lambda_uv = lambda_uv
         
-    def forward(self, signal, s_h, x_true, uv_true, detach_uv=False, uv_tolerance=0.05):
+    def forward(self, signal, s_h, x_true, uv_true, detach_uv=False, uv_tolerance=0.05, prefix='train/'):
         loss_rss = self.loss_rss_func(signal, x_true)
         loss_uv = self.loss_uv_func(signal, s_h, uv_true)
         if detach_uv or loss_uv < uv_tolerance:
             loss_uv = loss_uv.detach()
         loss = loss_rss + self.lambda_uv * loss_uv
-        return loss, (loss_rss, loss_uv)
+        loss_dict = {prefix+'loss': loss.item(), prefix + 'loss_rss': loss_rss.item(), prefix+'loss_uv': loss_uv.item()}
+        return loss, loss_dict
 
 class UVLoss(nn.Module):
     def __init__(self, block_size, eps = 1e-5):
