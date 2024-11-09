@@ -86,7 +86,7 @@ def preprocess(
             r_pad = hop_length * ((len(x) - 1) // hop_length + 1) - len(x) + l_pad + 1
             s = parselmouth.Sound(np.pad(x, (l_pad, r_pad)), sampling_rate).to_pitch_ac(
                     time_step=hop_length / sampling_rate, voicing_threshold=0.6,
-                    pitch_floor=f0_min, pitch_ceiling=1100)
+                    pitch_floor=f0_min, pitch_ceiling=f0_max)
             assert np.abs(s.t1 - 1.5 / f0_min) < 0.001
             f0 = s.selected_array['frequency']
             if len(f0) < len(mel):
