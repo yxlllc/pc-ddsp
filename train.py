@@ -1,7 +1,7 @@
 import os
 import argparse
 import torch
-
+from optimizer.muon import Muon_AdamW
 from logger import utils
 from data_loaders import get_data_loaders
 from solver import train
@@ -56,26 +56,22 @@ if __name__ == '__main__':
     else:
         raise ValueError(f" [x] Unknown Model: {args.model.type}")
     
-    # load parameters
-    optimizer = torch.optim.AdamW(model.parameters())
-    initial_global_step, model, optimizer = utils.load_model(args.env.expdir, model, optimizer, device=args.device)
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = args.train.lr
-        param_group['weight_decay'] = args.train.weight_decay
-        
-    # loss
-    loss_func = HybridLoss(args.data.block_size, args.loss.fft_min, args.loss.fft_max, args.loss.n_scale, args.loss.lambda_uv, args.device)
-
     # device
     if args.device == 'cuda':
         torch.cuda.set_device(args.env.gpu_id)
     model.to(args.device)
-    
-    for state in optimizer.state.values():
-        for k, v in state.items():
-            if torch.is_tensor(v):
-                state[k] = v.to(args.device)
-                    
+
+    # load parameters
+    optimizer = Muon_AdamW(model,
+                    muon_args={'weight_decay': args.train.weight_decay},
+                    adamw_args={'weight_decay': 0})
+    initial_global_step, model, optimizer = utils.load_model(args.env.expdir, model, optimizer, device=args.device)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = args.train.lr
+        
+    # loss
+    loss_func = HybridLoss(args.data.block_size, args.loss.fft_min, args.loss.fft_max, args.loss.n_scale, args.loss.lambda_uv, args.device)
+
     loss_func.to(args.device)
 
     # datas
