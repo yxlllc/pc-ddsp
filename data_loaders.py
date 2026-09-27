@@ -6,6 +6,7 @@ import torch
 import random
 from tqdm import tqdm
 from torch.utils.data import Dataset
+import concurrent.futures
 
 def traverse_dir(
         root_dir,
@@ -114,9 +115,10 @@ class AudioDataset(Dataset):
             print('Load all the data from :', path_root)
         else:
             print('Load the f0, uv data from :', path_root)
-        for name in tqdm(self.paths, total=len(self.paths)):
+            
+        def _load_single_file(name):
             path_audio = os.path.join(self.path_root, 'audio', name) + '.wav'
-            duration = librosa.get_duration(filename = path_audio, sr = self.sample_rate)
+            duration = librosa.get_duration(path = path_audio, sr = self.sample_rate)
             
             path_f0 = os.path.join(self.path_root, 'f0', name) + '.npy'
             f0 = np.load(path_f0)
@@ -134,7 +136,7 @@ class AudioDataset(Dataset):
                 audio_mel = np.load(path_mel)
                 audio_mel = torch.from_numpy(audio_mel).float()
                 
-                self.data_buffer[name] = {
+                data_dict = {
                         'duration': duration,
                         'audio': audio,
                         'audio_mel': audio_mel,
@@ -142,13 +144,25 @@ class AudioDataset(Dataset):
                         'uv': uv
                         }
             else:
-                self.data_buffer[name] = {
+                data_dict = {
                         'duration': duration,
                         'f0': f0,
                         'uv': uv
                         }
-           
+            return name, data_dict
 
+        max_workers = max(min(32, os.cpu_count()), 4)
+        print(f'Using {max_workers} workers for parallel data loading')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_name = {executor.submit(_load_single_file, name): name for name in self.paths}
+            for future in tqdm(concurrent.futures.as_completed(future_to_name), total=len(self.paths), desc='Loading data'):
+                try:
+                    name, data_dict = future.result()
+                    self.data_buffer[name] = data_dict
+                except Exception as e:
+                    print(f'Error loading {future_to_name[future]}: {e}')
+                    raise
+           
     def __getitem__(self, file_idx):
         name = self.paths[file_idx]
         data_buffer = self.data_buffer[name]
