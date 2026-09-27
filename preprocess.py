@@ -127,11 +127,11 @@ def preprocess(
             uv = np.pad(uv, (1, 1), constant_values=(uv[0], uv[-1]))
             # save npy
             os.makedirs(os.path.dirname(path_melfile), exist_ok=True)
-            np.save(path_melfile, mel)
+            np.save(path_melfile, np.ascontiguousarray(mel, dtype=np.float32))
             os.makedirs(os.path.dirname(path_f0file), exist_ok=True)
-            np.save(path_f0file, f0)
+            np.save(path_f0file, np.asarray(f0, dtype=np.float32))
             os.makedirs(os.path.dirname(path_uvfile), exist_ok=True)
-            np.save(path_uvfile, uv)
+            np.save(path_uvfile, np.asarray(uv, dtype=np.float32))
         else:
             print('\n[Error] F0 extraction failed: ' + path_srcfile)
             os.makedirs(path_skipdir, exist_ok=True)

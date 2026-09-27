@@ -185,10 +185,10 @@ class AudioDataset(Dataset):
         # load mel
         audio_mel = data_buffer.get('audio_mel')
         if audio_mel is None:
-            path_mel  = os.path.join(self.path_root, 'mel', name) + '.npy'
-            audio_mel = np.load(path_mel)
-            audio_mel = audio_mel[start_frame : start_frame + mel_frame_len]
-            audio_mel = torch.from_numpy(audio_mel).float() 
+            path_mel = os.path.join(self.path_root, 'mel', name) + '.npy'
+            audio_mel = np.load(path_mel, mmap_mode='r')
+            audio_mel = audio_mel[start_frame : start_frame + mel_frame_len].copy()
+            audio_mel = torch.from_numpy(audio_mel).float()
         else:
             audio_mel = audio_mel[start_frame : start_frame + mel_frame_len].clone()
 
