@@ -65,7 +65,7 @@ def test(args, model, loss_func, loader_test, saver):
     return test_loss_dict
 
 
-def train(args, initial_global_step, model, optimizer, loss_func, loader_train, loader_test):
+def train(args, initial_global_step, model, optimizer, scheduler, loss_func, loader_train, loader_test):
     # saver
     saver = Saver(args, initial_global_step=initial_global_step)
 
@@ -112,22 +112,26 @@ def train(args, initial_global_step, model, optimizer, loss_func, loader_train, 
                 # backpropagate
                 loss.backward()
                 optimizer.step()
+                scheduler.step()
 
             # log loss
             if saver.global_step % args.train.interval_log == 0:
+                current_lr =  optimizer.param_groups[0]['lr']
                 saver.log_info(
-                    'epoch: {} | {:3d}/{:3d} | {} | batch/s: {:.2f} | loss: {:.3f} | rss: {:.3f} | time: {} | step: {}'.format(
+                    'epoch: {} | {:3d}/{:3d} | {} | batch/s: {:.2f} | lr: {:.6} | loss: {:.3f} | rss: {:.3f} | time: {} | step: {}'.format(
                         epoch,
                         batch_idx,
                         num_batches,
                         args.env.expdir,
                         args.train.interval_log/saver.get_interval_time(),
+                        current_lr,
                         loss_dict['train/loss'],
                         loss_dict['train/loss_rss'],
                         saver.get_total_time(),
                         saver.global_step
                     )
                 )
+                loss_dict['train/lr'] = current_lr
                 saver.log_value(loss_dict)
             
             # validation

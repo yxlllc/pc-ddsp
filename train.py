@@ -1,6 +1,7 @@
 import os
 import argparse
 import torch
+from torch.optim import lr_scheduler
 from optimizer.muon import Muon_AdamW
 from logger import utils
 from data_loaders import get_data_loaders
@@ -67,7 +68,9 @@ if __name__ == '__main__':
                     adamw_args={'weight_decay': 0})
     initial_global_step, model, optimizer = utils.load_model(args.env.expdir, model, optimizer, device=args.device)
     for param_group in optimizer.param_groups:
-        param_group['lr'] = args.train.lr
+        param_group['initial_lr'] = args.train.lr
+        param_group['lr'] = args.train.lr * args.train.gamma ** max((initial_global_step - 2) // args.train.decay_step, 0)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=args.train.decay_step, gamma=args.train.gamma, last_epoch=initial_global_step-2)
         
     # loss
     loss_func = HybridLoss(args.data.block_size, args.loss.fft_min, args.loss.fft_max, args.loss.n_scale, args.loss.lambda_uv, args.device)
@@ -78,5 +81,5 @@ if __name__ == '__main__':
     loader_train, loader_valid = get_data_loaders(args, whole_audio=False)
     
     # run
-    train(args, initial_global_step, model, optimizer, loss_func, loader_train, loader_valid)
+    train(args, initial_global_step, model, optimizer, scheduler, loss_func, loader_train, loader_valid)
     

@@ -37,5 +37,7 @@ train:
   interval_log: 10
   interval_val: 2000
   lr: 0.0005
-  weight_decay: 0
+  decay_step: 4000
+  gamma: 0.9
+  weight_decay: 0.1
   save_opt: false
