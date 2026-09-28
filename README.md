@@ -16,6 +16,8 @@ UPDATE (2023.10.15): Improve the phase filter, so the old version is not compati
 
 UPDATE (2024.5.4): Improve the model and refactor the code, so the old version is not compatible.
 
+UPDATE (2026.9.28): Improve the model and refactor the code, so the old version is not compatible.
+
 ## 1. Installing the dependencies
 
 We recommend first installing PyTorch from the [official website](https://pytorch.org/), then run:
@@ -24,7 +26,7 @@ We recommend first installing PyTorch from the [official website](https://pytorc
 pip install -r requirements.txt
 ```
 
-UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works, and training is faster.
+UPDATE: python 3.11 (windows) + cuda 13.0 + torch 2.9.1 + torchaudio 2.9.1 works, and training is faster.
 
 ## 2. Preprocessing
 
