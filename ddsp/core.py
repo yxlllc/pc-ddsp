@@ -140,12 +140,19 @@ def fft_convolve(audio,
     return output_signal
 
           
+def to_fft_dtype(tensor):
+    # cuFFT in half precision only supports power-of-2 transform sizes, so keep
+    # the FFT input in fp32 (or complex64) under autocast.
+    return tensor.to(torch.complex64) if torch.is_complex(tensor) else tensor.float()
+
+
 def frequency_impulse_response(magnitudes,
                                hann_window = True,
                                half_width_frames = None):
                                
     # Get the IR
-    impulse_response = torch.fft.irfft(magnitudes) # B, n_frames, 2*(n_mags-1)
+    with torch.autocast(device_type=magnitudes.device.type, enabled=False):
+        impulse_response = torch.fft.irfft(to_fft_dtype(magnitudes)) # B, n_frames, 2*(n_mags-1)
     ir_size = impulse_response.size(-1)
     impulse_response = impulse_response.roll(int(ir_size // 2), -1)
     

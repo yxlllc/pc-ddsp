@@ -5,6 +5,7 @@ import torch
 
 from logger.saver import Saver
 from logger import utils
+from torch.amp import autocast, GradScaler
 
 def test(args, model, loss_func, loader_test, saver):
     print(' [*] testing...')
@@ -79,6 +80,15 @@ def train(args, initial_global_step, model, optimizer, scheduler, loss_func, loa
     num_batches = len(loader_train)
     model.train()
     saver.log_info('======= start training =======')
+    scaler = GradScaler()
+    if args.train.amp_dtype == 'fp32':
+        dtype = torch.float32
+    elif args.train.amp_dtype == 'fp16':
+        dtype = torch.float16
+    elif args.train.amp_dtype == 'bf16':
+        dtype = torch.bfloat16
+    else:
+        raise ValueError(' [x] Unknown amp_dtype: ' + args.train.amp_dtype)
     for epoch in range(args.train.epochs):
         for batch_idx, data in enumerate(loader_train):
             saver.global_step_increment()
@@ -90,7 +100,11 @@ def train(args, initial_global_step, model, optimizer, scheduler, loss_func, loa
                     data[k] = data[k].to(args.device)
             
             # forward
-            signal, _, (s_h, s_n) = model(data['mel'], data['f0'], infer=False)
+            if dtype == torch.float32:
+                signal, _, (s_h, s_n) = model(data['mel'], data['f0'], infer=False)
+            else:
+                with autocast(device_type=args.device, dtype=dtype):
+                    signal, _, (s_h, s_n) = model(data['mel'], data['f0'], infer=False)
 
             # loss
             detach_uv = False
@@ -110,8 +124,13 @@ def train(args, initial_global_step, model, optimizer, scheduler, loss_func, loa
                 raise ValueError(' [x] nan loss ')
             else:
                 # backpropagate
-                loss.backward()
-                optimizer.step()
+                if dtype == torch.float32:
+                    loss.backward()
+                    optimizer.step()
+                else:
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
                 scheduler.step()
 
             # log loss
