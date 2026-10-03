@@ -3,7 +3,6 @@ author: wayn391@mastertones
 '''
 
 import os
-import json
 import time
 import yaml
 import datetime
@@ -94,8 +93,7 @@ class Saver(object):
             model, 
             optimizer,
             name='model',
-            postfix='',
-            to_json=False):
+            postfix=''):
         # path
         if postfix:
             postfix = '_' + postfix
@@ -115,12 +113,6 @@ class Saver(object):
             torch.save({
                 'global_step': self.global_step,
                 'model': model.state_dict()}, path_pt)
-            
-        # to json
-        if to_json:
-            path_json = os.path.join(
-                self.expdir , name+'.json')
-            utils.to_json(path_params, path_json)
             
     def global_step_increment(self):
         self.global_step += 1
