@@ -29,7 +29,10 @@ class ATanGLU(nn.Module):
         # out, gate = x.chunk(2, dim=self.dim)
         # Using torch.split instead of chunk for ONNX export compatibility.        
         out, gate = torch.split(x, x.size(self.dim) // 2, dim=self.dim)
-        return ATanGLUFunction.apply(out, gate)
+        if self.training:
+            return ATanGLUFunction.apply(out, gate)
+        else:
+            return out * torch.atan(gate)
 
        
 class SoftSignGLUFunction(torch.autograd.Function):
@@ -119,7 +122,7 @@ class DoubleSoftSignGLU(nn.Module):
         if self.training:
             return DoubleSoftSignGLUFunction.apply(x, self.dim)
         # softsign whole tensor first (one elementwise op), then split
-        ss = torch.nn.functional.softsign(x)
+        ss = F.softsign(x)
         out, gate = torch.split(ss, ss.size(self.dim) // 2, dim=self.dim)
         return out * gate
 
