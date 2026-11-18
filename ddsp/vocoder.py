@@ -152,6 +152,13 @@ class Sins(torch.nn.Module):
         self.register_buffer("block_size", torch.tensor(block_size))
         self.register_buffer("win_length", torch.tensor(win_length))
         self.register_buffer("window", torch.hann_window(win_length))
+        # Plain Python copies of the scalar buffers.  Reading a 0-dim CUDA
+        # tensor as a Python number goes through __index__/__float__, which is
+        # a device->host copy and therefore a full synchronisation.  `forward`
+        # does that once per scalar use, so cache the values here instead.
+        self._block_size = int(block_size)
+        self._win_length = int(win_length)
+        self._sampling_rate = float(sampling_rate)
         # Mel2Control
         split_map = {
             'amplitudes': n_harmonics,
@@ -167,10 +174,10 @@ class Sins(torch.nn.Module):
             self.mean_kernel_size = 1
     
     def fast_phase_gen(self, f0_frames):
-        n = torch.arange(self.block_size, device=f0_frames.device)
-        s0 = f0_frames / self.sampling_rate
+        n = torch.arange(self._block_size, device=f0_frames.device)
+        s0 = f0_frames / self._sampling_rate
         ds0 = F.pad(s0[:, 1:, :] - s0[:, :-1, :], (0, 0, 0, 1))
-        rad = s0 * (n + 1) + 0.5 * ds0 * n * (n + 1) / self.block_size
+        rad = s0 * (n + 1) + 0.5 * ds0 * n * (n + 1) / self._block_size
         rad2 = torch.fmod(rad[..., -1:].float() + 0.5, 1.0) - 0.5
         rad_acc = rad2.cumsum(dim=1).fmod(1.0).to(f0_frames)
         rad += F.pad(rad_acc[:, :-1, :], (0, 0, 1, 0))
@@ -192,11 +199,11 @@ class Sins(torch.nn.Module):
         
         # sinusoid exciter signal
         sinusoid = torch.sin(phase).squeeze(-1)
-        sinusoid_frames = sinusoid.unfold(1, self.block_size, self.block_size)
+        sinusoid_frames = sinusoid.unfold(1, self._block_size, self._block_size)
         
         # noise exciter signal
         noise = torch.randn_like(sinusoid)
-        noise_frames = noise.unfold(1, self.block_size, self.block_size)
+        noise_frames = noise.unfold(1, self._block_size, self._block_size)
         
         # parameter prediction
         ctrls = self.mel2ctrl(mel_frames, sinusoid_frames, noise_frames)
@@ -215,31 +222,31 @@ class Sins(torch.nn.Module):
             phase = self.fast_phase_gen(output_f0_frames)  
         n_harmonic = amplitudes_frames.shape[-1]
         level_harmonic = torch.arange(1, n_harmonic + 1, device=phase.device)
-        mask = (f0_frames * level_harmonic < self.sampling_rate / 2).float() + 1e-7
+        mask = (f0_frames * level_harmonic < self._sampling_rate / 2).float() + 1e-7
         amplitudes_frames *= mask
         sinusoids = 0.
         for n in range(( n_harmonic - 1) // max_upsample_dim + 1):
             start = n * max_upsample_dim
             end = (n + 1) * max_upsample_dim
             phases = phase * level_harmonic[start:end]
-            amplitudes = upsample(amplitudes_frames[:,:,start:end], self.block_size)
+            amplitudes = upsample(amplitudes_frames[:,:,start:end], self._block_size)
             sinusoids += (torch.sin(phases) * amplitudes).sum(-1)
         
         # harmonic part filter (all pass)
         harmonic_spec = torch.stft(
                             sinusoids,
-                            n_fft = self.win_length,
-                            win_length = self.win_length,
-                            hop_length = self.block_size,
+                            n_fft = self._win_length,
+                            win_length = self._win_length,
+                            hop_length = self._block_size,
                             window = self.window,
                             center = True,
                             return_complex = True)
         harmonic_spec = harmonic_spec * src_allpass.permute(0, 2, 1)
         harmonic = torch.istft(
                         harmonic_spec,
-                        n_fft = self.win_length,
-                        win_length = self.win_length,
-                        hop_length = self.block_size,
+                        n_fft = self._win_length,
+                        win_length = self._win_length,
+                        hop_length = self._block_size,
                         window = self.window,
                         center = True)
                         
@@ -270,6 +277,13 @@ class CombSub(torch.nn.Module):
         self.register_buffer("block_size", torch.tensor(block_size))
         self.register_buffer("win_length", torch.tensor(win_length))
         self.register_buffer("window", torch.hann_window(win_length))
+        # Plain Python copies of the scalar buffers.  Reading a 0-dim CUDA
+        # tensor as a Python number goes through __index__/__float__, which is
+        # a device->host copy and therefore a full synchronisation.  `forward`
+        # does that once per scalar use, so cache the values here instead.
+        self._block_size = int(block_size)
+        self._win_length = int(win_length)
+        self._sampling_rate = float(sampling_rate)
         # Mel2Control
         split_map = {            
             'harmonic_magnitude': n_mag_harmonic,
@@ -285,11 +299,11 @@ class CombSub(torch.nn.Module):
             self.mean_kernel_size = 1
     
     def fast_source_gen(self, f0_frames):
-        n = torch.arange(self.block_size, device=f0_frames.device)
-        s0 = f0_frames / self.sampling_rate
+        n = torch.arange(self._block_size, device=f0_frames.device)
+        s0 = f0_frames / self._sampling_rate
         ds0 = F.pad(s0[:, 1:, :] - s0[:, :-1, :], (0, 0, 0, 1))
-        rad = s0 * (n + 1) + 0.5 * ds0 * n * (n + 1) / self.block_size
-        s0 = s0 + ds0 * n / self.block_size
+        rad = s0 * (n + 1) + 0.5 * ds0 * n * (n + 1) / self._block_size
+        s0 = s0 + ds0 * n / self._block_size
         rad2 = torch.fmod(rad[..., -1:].float() + 0.5, 1.0) - 0.5
         rad_acc = rad2.cumsum(dim=1).fmod(1.0).to(f0_frames)
         rad += F.pad(rad_acc[:, :-1, :], (0, 0, 1, 0))
@@ -310,11 +324,11 @@ class CombSub(torch.nn.Module):
                 
         # combtooth exciter signal
         combtooth = self.fast_source_gen(f0_frames)
-        combtooth_frames = combtooth.unfold(1, self.block_size, self.block_size)
+        combtooth_frames = combtooth.unfold(1, self._block_size, self._block_size)
         
         # noise exciter signal
         noise = torch.randn_like(combtooth)
-        noise_frames = noise.unfold(1, self.block_size, self.block_size)
+        noise_frames = noise.unfold(1, self._block_size, self._block_size)
         
         # parameter prediction
         ctrls = self.mel2ctrl(mel_frames, combtooth_frames, noise_frames)
@@ -335,23 +349,23 @@ class CombSub(torch.nn.Module):
                         combtooth,
                         torch.complex(src_param, torch.zeros_like(src_param)),
                         hann_window = True,
-                        half_width_frames = 1.5 * self.sampling_rate / (f0_frames + 1e-3))
+                        half_width_frames = 1.5 * self._sampling_rate / (f0_frames + 1e-3))
                
         # harmonic part filter (all pass)
         harmonic_spec = torch.stft(
                             harmonic,
-                            n_fft = self.win_length,
-                            win_length = self.win_length,
-                            hop_length = self.block_size,
+                            n_fft = self._win_length,
+                            win_length = self._win_length,
+                            hop_length = self._block_size,
                             window = self.window,
                             center = True,
                             return_complex = True)
         harmonic_spec = harmonic_spec * src_allpass.permute(0, 2, 1)
         harmonic = torch.istft(
                         harmonic_spec,
-                        n_fft = self.win_length,
-                        win_length = self.win_length,
-                        hop_length = self.block_size,
+                        n_fft = self._win_length,
+                        win_length = self._win_length,
+                        hop_length = self._block_size,
                         window = self.window,
                         center = True)
                         
@@ -362,4 +376,4 @@ class CombSub(torch.nn.Module):
                        
         signal = harmonic + noise
 
-        return signal, combtooth, (harmonic, noise)
+        return signal, combtooth, (harmonic, noise)
